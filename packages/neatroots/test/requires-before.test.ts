@@ -31,6 +31,8 @@ interface Call {
   fail?: boolean;
   /** Start together with the previous call instead of after it. */
   parallel?: boolean;
+  unfinished?: boolean;
+  zeroDuration?: boolean;
 }
 
 function run(calls: Call[]) {
@@ -42,6 +44,8 @@ function run(calls: Call[]) {
   const spans = calls.map((c) => (c.fail ? toolSpan(t, root, c.tool, "{}", undefined, "HTTP 500") : toolSpan(t, root, c.tool, "{}", '{"ok":true}')));
   calls.forEach((c, i) => {
     if (c.parallel && i > 0) spans[i].startTimeUnixNano = spans[i - 1].startTimeUnixNano;
+    if (c.unfinished) spans[i].endTimeUnixNano = "0";
+    if (c.zeroDuration) spans[i].endTimeUnixNano = spans[i].startTimeUnixNano;
   });
   st.ingest([batch(spans)]);
   return evaluateRule(check, loadTrace(st, t), false);
@@ -93,6 +97,14 @@ describe("requires_before", () => {
 
   it("does not guess when the two calls started together", () => {
     expect(run([{ tool: "lookup_order" }, { tool: "issue_refund", parallel: true }])).toBeNull();
+  });
+
+  it("fires when an earlier lookup has not ended", () => {
+    expect(run([{ tool: "lookup_order", unfinished: true }, { tool: "issue_refund" }])?.firing).toBe(true);
+  });
+
+  it("counts a completed zero-duration lookup", () => {
+    expect(run([{ tool: "lookup_order", zeroDuration: true }, { tool: "issue_refund" }])).toBeNull();
   });
 
   it("fires when the refund starts before the earlier lookup finishes", () => {
