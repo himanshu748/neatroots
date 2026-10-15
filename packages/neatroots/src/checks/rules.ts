@@ -196,7 +196,11 @@ export function evaluateRule(check: RuleCheck, t: TraceSnapshot, atEnd: boolean,
       if (!guarded.length) return null;
       // Instrumented spans that succeed usually report status unset, so only errors are ruled out.
       const needed = selectSpans(t.spans, { ...r.requires, status: "any" }).filter((s) => s.status !== "error");
-      const missed = guarded.filter((g) => !needed.some((n) => n.id !== g.id && n.startMs <= g.startMs));
+      // A prerequisite that merely started earlier may still be running when the guarded
+      // call begins. Keep equal starts conservative because their order is ambiguous.
+      const missed = guarded.filter(
+        (g) => !needed.some((n) => n.id !== g.id && n.startMs <= g.startMs && (n.startMs === g.startMs || n.endMs <= g.startMs)),
+      );
       if (!missed.length) return null;
       const first = missed[0];
       return {

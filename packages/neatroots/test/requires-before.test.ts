@@ -95,6 +95,19 @@ describe("requires_before", () => {
     expect(run([{ tool: "lookup_order" }, { tool: "issue_refund", parallel: true }])).toBeNull();
   });
 
+  it("fires when the refund starts before the earlier lookup finishes", () => {
+    const h = tmpHome();
+    homes.push(h);
+    const st = new Store(path.join(h, "data"));
+    const t = hex(16);
+    const root = hex(8);
+    const lookup = toolSpan(t, root, "lookup_order", "{}", '{"ok":true}');
+    const refund = toolSpan(t, root, "issue_refund", "{}", '{"ok":true}');
+    refund.startTimeUnixNano = (BigInt(lookup.startTimeUnixNano) + 1_000_000n).toString();
+    st.ingest([batch([lookup, refund])]);
+    expect(evaluateRule(check, loadTrace(st, t), false)?.firing).toBe(true);
+  });
+
   it("labeled smoke: 120 generated runs, every verdict matches the label", () => {
     let tp = 0, fn = 0, fp = 0, tn = 0;
     for (let i = 0; i < 120; i++) {
