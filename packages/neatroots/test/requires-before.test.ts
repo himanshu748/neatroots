@@ -125,6 +125,29 @@ describe("requires_before", () => {
     expect(evaluateRule(check, loadTrace(st, t), false)?.firing).toBe(false);
   });
 
+  it.each([
+    ["ends one nanosecond before the refund", 0, 499, 500, false],
+    ["ends exactly at the refund's nanosecond start", 0, 500, 500, false],
+    ["ends one nanosecond after the refund starts", 0, 501, 500, true],
+    ["has an end before its earlier nanosecond start", 499, 498, 500, false],
+    ["has an end before its equal nanosecond start", 500, 499, 500, false],
+    ["has an end before its later nanosecond start", 501, 499, 500, true],
+  ] as const)("uses nanosecond precision when the lookup %s", (_label, start, end, guarded, firing) => {
+    const h = tmpHome();
+    homes.push(h);
+    const st = trackedStore(path.join(h, "data"));
+    const t = hex(16);
+    const root = hex(8);
+    const lookup = toolSpan(t, root, "lookup_order", "{}", '{"ok":true}');
+    const refund = toolSpan(t, root, "issue_refund", "{}", '{"ok":true}');
+    const origin = BigInt(lookup.startTimeUnixNano);
+    lookup.startTimeUnixNano = (origin + BigInt(start)).toString();
+    lookup.endTimeUnixNano = (origin + BigInt(end)).toString();
+    refund.startTimeUnixNano = (origin + BigInt(guarded)).toString();
+    st.ingest([batch([lookup, refund])]);
+    expect(evaluateRule(check, loadTrace(st, t), false)?.firing).toBe(firing);
+  });
+
   it("counts a completed zero-duration lookup at the same start", () => {
     expect(run([{ tool: "lookup_order", zeroDuration: true }, { tool: "issue_refund", parallel: true }])?.firing).toBe(false);
   });

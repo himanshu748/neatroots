@@ -13,6 +13,9 @@ export interface SpanInfo {
   kind: SpanKind;
   startMs: number;
   endMs: number;
+  /** Raw OTLP timestamps for comparisons that need nanosecond precision. */
+  startNs: string;
+  endNs: string;
   /** The raw OTLP end time is nonzero; endMs alone is normalized for unfinished spans. */
   ended: boolean;
   durationMs: number;
@@ -86,6 +89,8 @@ export function loadTrace(store: Store, traceId: string): TraceSnapshot {
       kind: v.kind,
       startMs: row.start_ms,
       endMs: row.end_ms,
+      startNs: row.start_ns,
+      endNs: row.end_ns,
       ended: row.end_ns !== "0",
       durationMs: row.duration_ms,
       status: statusOf(row),
